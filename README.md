@@ -69,3 +69,32 @@ The goal was to provide clear, actionable insights into support operations and e
 | Visualization | Power BI (DAX, dynamic dashboards) |
 | Collaboration | Stakeholder reviews · Documentation |
 | Skills | Data Cleaning · KPI Design · Data Governance |
+
+## 📁 Folder Structure  
+
+```markdown
+tickets_dashboard/
+│
+├── 📘 README.md                      # Project documentation
+│
+├── 📂 data/
+│   ├── raw_zendesk_export.xlsx       # Original exported data (anonymized)
+│   ├── cleaned_tickets.xlsx          # Processed and cleaned data
+│   └── kpi_definitions.xlsx          # KPI structure and metadata
+│
+├── 📂 scripts/
+│   ├── data_import_vba.bas           # VBA script for automated import
+│   ├── cleaning_rules.txt            # Notes on data transformation logic
+│
+├── 📂 dashboard/
+│   ├── tickets_dashboard.pbix        # Power BI dashboard file
+│   ├── dax_measures.txt              # Key DAX measures and calculations
+│   └── powerquery_scripts.m          # Power Query ETL transformations
+│
+├── 📂 reports/
+│   ├── dashboard_screenshot.png      # Preview of dashboard visuals
+│   └── performance_summary.pdf       # Summary of post-implementation results
+│
+└── 📂 docs/
+    ├── stakeholder_notes.md          # Meeting notes and feedback iterations
+    └── data_quality_recommendations.md
