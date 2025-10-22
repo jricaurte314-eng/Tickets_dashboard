@@ -1,4 +1,4 @@
-# 📊 Tickets Dashboard – Zendesk · Excel VBA · Power BI
+# 📊 Tickets Dashboard – Zendesk · Power BI
 
 ## 🧠 Overview  
 
