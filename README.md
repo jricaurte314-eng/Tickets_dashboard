@@ -20,9 +20,9 @@ The goal was to provide clear, actionable insights into support operations and e
 
 ### **2️⃣ Data Cleaning & Import Automation**
 - Performed **deep data cleaning** using Excel and Power Query, standardizing ticket categories, timestamps, and user identifiers.  
-- Built a **VBA-based data import automation** workflow, ensuring periodic extraction and upload of new Zendesk data with minimal manual effort.  
+- Built a **ELT-based data import automation** workflow, ensuring periodic extraction and upload of new Zendesk data with minimal manual effort.  
 
-🧰 *Tools:* Excel VBA · Power Query · Power BI  
+🧰 *Tools:* Power Query · Power BI  
 
 ---
 
@@ -46,7 +46,6 @@ The goal was to provide clear, actionable insights into support operations and e
 - Tickets created, resolved, reopened  
 - Average response/resolution times  
 - SLA compliance rate  
-- Customer satisfaction (CSAT) trends  
 - Volume per agent and issue type  
 
 ---
@@ -69,32 +68,3 @@ The goal was to provide clear, actionable insights into support operations and e
 | Visualization | Power BI (DAX, dynamic dashboards) |
 | Collaboration | Stakeholder reviews · Documentation |
 | Skills | Data Cleaning · KPI Design · Data Governance |
-
-## 📁 Folder Structure  
-
-```markdown
-tickets_dashboard/
-│
-├── 📘 README.md                      # Project documentation
-│
-├── 📂 data/
-│   ├── raw_zendesk_export.xlsx       # Original exported data (anonymized)
-│   ├── cleaned_tickets.xlsx          # Processed and cleaned data
-│   └── kpi_definitions.xlsx          # KPI structure and metadata
-│
-├── 📂 scripts/
-│   ├── data_import_vba.bas           # VBA script for automated import
-│   ├── cleaning_rules.txt            # Notes on data transformation logic
-│
-├── 📂 dashboard/
-│   ├── tickets_dashboard.pbix        # Power BI dashboard file
-│   ├── dax_measures.txt              # Key DAX measures and calculations
-│   └── powerquery_scripts.m          # Power Query ETL transformations
-│
-├── 📂 reports/
-│   ├── dashboard_screenshot.png      # Preview of dashboard visuals
-│   └── performance_summary.pdf       # Summary of post-implementation results
-│
-└── 📂 docs/
-    ├── stakeholder_notes.md          # Meeting notes and feedback iterations
-    └── data_quality_recommendations.md
