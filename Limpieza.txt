@@ -1,0 +1,225 @@
+let
+  // ========================
+  // Parámetros / Settings
+  // ========================
+  SourcePath   = #"Localización del archivo",                 // <- parámetro en Power BI
+  Culture      = "es-MX",                                     // controla parsing de fechas/texto
+  StatusMap    = #table({"from","to"}, {{"Closed","Cerrado"},{"Hold","En espera"},{"Open","Abierto"},{"Pending","Pendiente"},{"Solved","Resuelto"}}),
+  PriorityMap  = #table({"from","to"}, {{"Low","Baja"},{"High","Alta"},{"Urgent","Urgente"}}),
+  CSATMap      = #table({"from","to"}, {{"Not Offered","No ofrecido"},{"Offered","Ofrecido"},{"Good","Bueno"},{"Bad","Malo"}}),
+
+  // ========================
+  // Utilidades de limpieza
+  // ========================
+  // Convierte a texto de forma segura
+  ToText = (x as any) as text => if x = null then "" else Text.From(x, Culture),
+
+  // Normaliza nulos comunes: "", "NA", "N/A", "null", "NULL" -> null
+  NormalizeNulls = (t as table, cols as list) as table =>
+    List.Accumulate(
+      cols,
+      t,
+      (state, col) => Table.ReplaceValue(
+          state,
+          each Text.Trim(ToText(Record.Field(_, col))),
+          each if List.Contains({"","NA","N/A","null","NULL"}, Text.Trim(ToText(Record.Field(_, col)))) then null else Record.Field(_, col),
+          Replacer.ReplaceValue,
+          {col}
+      )
+    ),
+
+  // Trim a todas las columnas de texto
+  TrimAllText = (t as table) as table =>
+    Table.TransformColumns(
+      t,
+      List.Transform(
+        Table.ColumnNames(t),
+        (c)=> let ty = Value.Type(Table.Column(t, c)){0}? ?? type any in
+              if Type.Is(ty, type text) then {c, Text.Trim, type text} else {c, each _, ty}
+      )
+    ),
+
+  // Estandariza valores por tabla de mapeo (case-insensitive)
+  ApplyMap = (t as table, col as text, map as table) as table =>
+    let
+      WithLower = Table.AddColumn(map, "_from", each Text.Lower([from])),
+      Dict      = Record.FromTable(Table.ToColumns(WithLower){1} & Table.ToColumns(WithLower){2}),
+      Fx        = (v as any) =>
+                    let k = Text.Lower(ToText(v)) in
+                    if Record.HasFields(Dict, k) then Record.Field(Dict, k) else v
+    in
+      Table.TransformColumns(t, {{col, Fx, type text}}),
+
+  // Enmascara email: usuario@dominio -> u***@d*****.tld
+  MaskEmail = (email as nullable text) as nullable text =>
+    if email = null or email = "" or not Text.Contains(email, "@") then email else
+    let
+      p = Text.PositionOf(email, "@"),
+      u = Text.Start(email, p),
+      d = Text.Range(email, p + 1),
+      uMask = if Text.Length(u) > 1 then Text.Start(u,1) & Text.Repeat("*", Text.Length(u)-1) else "*",
+      dParts = Text.Split(d, "."),
+      dHead  = if List.Count(dParts)>0 then dParts{0} else "",
+      dTail  = if List.Count(dParts)>1 then "." & Text.Combine(List.Skip(dParts,1), ".") else "",
+      dMask  = if Text.Length(dHead)>1 then Text.Start(dHead,1) & Text.Repeat("*", Text.Length(dHead)-1) else "*"
+    in
+      uMask & "@" & dMask & dTail,
+
+  // Enmascara dominio (Company / Organization): ACME S.A. -> C****** S.*
+  MaskName = (name as nullable text) as nullable text =>
+    if name = null or name = "" then name else
+    let
+      parts = Text.Split(Text.Trim(name), " "),
+      mask  = List.Transform(parts, (p)=> if Text.Length(p)>1 then Text.Start(p,1) & Text.Repeat("*", Text.Length(p)-1) else "*")
+    in
+      Text.Combine(mask, " ")
+  ,
+
+  // ========================
+  // Ingesta
+  // ========================
+  Raw = Csv.Document(
+          File.Contents(SourcePath),
+          [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.None]
+        ),
+  Promoted = Table.PromoteHeaders(Raw, [PromoteAllScalars=true]),
+
+  // ========================
+  // Tipificación controlada
+  // ========================
+  Typed = Table.TransformColumnTypes(
+    Promoted,
+    {
+      {"Summation column", Int64.Type},
+      {"Id", Int64.Type},
+      {"Requester", type text},
+      {"Requester id", Int64.Type},
+      {"Requester external id", type any},
+      {"Requester email", type text},
+      {"Requester domain", type text},
+      {"Submitter", type text},
+      {"Assignee", type text},
+      {"Group", type text},
+      {"Subject", type text},
+      {"Tags", type text},
+      {"Status", type text},
+      {"Priority", type text},
+      {"Via", type text},
+      {"Ticket type", type text},
+      {"Created at", type datetime},
+      {"Updated at", type datetime},
+      {"Assigned at", type datetime},
+      {"Organization", type text},
+      {"Due date", type any},
+      {"Initially assigned at", type datetime},
+      {"Solved at", type datetime},
+      {"Resolution time", Int64.Type},
+      {"Satisfaction Score", type text},
+      {"Group stations", Int64.Type},
+      {"Assignee stations", Int64.Type},
+      {"Reopens", Int64.Type},
+      {"Replies", Int64.Type},
+      {"First reply time in minutes", Int64.Type},
+      {"First reply time in minutes within business hours", Int64.Type},
+      {"First resolution time in minutes", Int64.Type},
+      {"First resolution time in minutes within business hours", Int64.Type},
+      {"Full resolution time in minutes", Int64.Type},
+      {"Full resolution time in minutes within business hours", Int64.Type},
+      {"Agent wait time in minutes", Int64.Type},
+      {"Agent wait time in minutes within business hours", Int64.Type},
+      {"Requester wait time in minutes", Int64.Type},
+      {"Requester wait time in minutes within business hours", Int64.Type},
+      {"On hold time in minutes", Int64.Type},
+      {"On hold time in minutes within business hours", Int64.Type},
+      {"Brand name", type text},
+      {"Company [txt]", type text}
+      // (Puedes mantener/ajustar el resto de columnas personalizadas)
+    },
+    Culture
+  ),
+
+  // ========================
+  // Normalización de texto
+  // ========================
+  Trimmed      = TrimAllText(Typed),
+  NullNormed   = NormalizeNulls(Trimmed, {"Requester","Requester email","Requester domain","Organization","Company [txt]","Priority","Status","Satisfaction Score"}),
+
+  // ========================
+  // Estandarización por mapeos
+  // ========================
+  StatusStd    = ApplyMap(NullNormed, "Status", StatusMap),
+  PriorityStd  = ApplyMap(StatusStd , "Priority", PriorityMap),
+  CSATStd      = ApplyMap(PriorityStd, "Satisfaction Score", CSATMap),
+
+  // ========================
+  // Derivados útiles (copias seguras y partes de fecha)
+  // ========================
+  SafeCopies = Table.TransformColumns(
+    Table.DuplicateColumn(
+      Table.DuplicateColumn(
+        Table.DuplicateColumn(
+          Table.DuplicateColumn(CSATStd, "Created at", "Created at (copy)"),
+          "Updated at", "Updated at (copy)"
+        ),
+        "Assigned at", "Assigned at (copy)"
+      ),
+      "Solved at", "Solved at (copy)"
+    ),
+    {{"Created at (copy)", each _, type datetime}, {"Updated at (copy)", each _, type datetime}, {"Assigned at (copy)", each _, type datetime}, {"Solved at (copy)", each _, type datetime}}
+  ),
+
+  DateParts = Table.TransformColumns(
+    Table.TransformColumnTypes(
+      Table.AddColumn(SafeCopies, "Created Date", each Date.From([Created at]), type date),
+      {{"Created at", type datetime}, {"Solved at", type nullable datetime}}
+    ),
+    {}
+  ),
+  WithYear   = Table.AddColumn(DateParts, "Created Year", each Date.Year([Created Date]), Int64.Type),
+  WithMonth  = Table.AddColumn(WithYear , "Created Month", each Date.Month([Created Date]), Int64.Type),
+  WithDay    = Table.AddColumn(WithMonth, "Created Day", each Date.Day([Created Date]), Int64.Type),
+  WithHour   = Table.AddColumn(WithDay  , "Created Hour", each Time.Hour(Time.From([Created at])), Int64.Type),
+
+  // ========================
+  // Enmascaramiento PII
+  // ========================
+  Masked = Table.TransformColumns(
+    WithHour,
+    {
+      {"Requester email", each MaskEmail(_), type nullable text},
+      {"Requester domain", each MaskName(_), type nullable text},
+      {"Requester", each MaskName(_), type nullable text},
+      {"Organization", each MaskName(_), type nullable text},
+      {"Company [txt]", each Text.Lower(MaskName(_)), type nullable text}
+    }
+  ),
+
+  // ========================
+  // Validaciones y arreglos de outliers / negativos
+  // ========================
+  ClampNonNegative = (n as nullable number) as nullable number => if n = null then null else Number.Max(0, n),
+  FixedTimes = Table.TransformColumns(
+    Masked,
+    {
+      {"First reply time in minutes", ClampNonNegative, Int64.Type},
+      {"First reply time in minutes within business hours", ClampNonNegative, Int64.Type},
+      {"First resolution time in minutes", ClampNonNegative, Int64.Type},
+      {"First resolution time in minutes within business hours", ClampNonNegative, Int64.Type},
+      {"Full resolution time in minutes", ClampNonNegative, Int64.Type},
+      {"Full resolution time in minutes within business hours", ClampNonNegative, Int64.Type},
+      {"Agent wait time in minutes", ClampNonNegative, Int64.Type},
+      {"Agent wait time in minutes within business hours", ClampNonNegative, Int64.Type},
+      {"Requester wait time in minutes", ClampNonNegative, Int64.Type},
+      {"Requester wait time in minutes within business hours", ClampNonNegative, Int64.Type},
+      {"On hold time in minutes", ClampNonNegative, Int64.Type},
+      {"On hold time in minutes within business hours", ClampNonNegative, Int64.Type}
+    }
+  ),
+
+  // ========================
+  // Ordenamiento e índice (opcional)
+  // ========================
+  Sorted = Table.Sort(FixedTimes, {{"Company [txt]", Order.Descending}}),
+  Indexed = Table.AddIndexColumn(Sorted, "RowId", 0, 1, Int64.Type)
+in
+  Indexed

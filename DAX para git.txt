@@ -1,0 +1,129 @@
+//---------------------------------------------
+// MEDIDAS (usar en tarjetas, tablas y gráficos)
+//---------------------------------------------
+
+// Umbral configurable (horas) para SLA de First Reply.
+// Puedes convertirlo en parámetro de “What-if” si quieres exponerlo en el reporte.
+SLA First Reply (horas) = 24
+
+// % de tickets que cumplen el SLA de First Reply
+% SLA First Reply Cumplido =
+VAR _numerador =
+    CALCULATE (
+        COUNTROWS ( Tickets ),
+        KEEPFILTERS ( Tickets[First Reply (horas)] <= [SLA First Reply (horas)] )
+    )
+VAR _denominador = COUNTROWS ( Tickets )
+RETURN DIVIDE ( _numerador, _denominador )
+
+// Promedios de tiempos clave (en horas)
+Promedio First Reply (h) =
+    AVERAGEX ( Tickets, Tickets[First Reply (horas)] )
+
+Promedio First Resolution (h) =
+    AVERAGEX ( Tickets, Tickets[First Resolution (horas)] )
+
+Promedio Full Resolution (h) =
+    AVERAGEX ( Tickets, Tickets[Full Resolution (horas)] )
+
+// Tiempos netos (excluyen On Hold) – útiles para Pareto/benchmark
+Promedio First Resolution neto (h) =
+    AVERAGEX ( Tickets, Tickets[First Resolution neto (horas)] )
+
+Promedio Full Resolution neto (h) =
+    AVERAGEX ( Tickets, Tickets[Full Resolution neto (horas)] )
+
+// % de tickets atendidos por el equipo interno (Our Team)
+% Atendidos por Our Team =
+VAR _num = CALCULATE ( COUNTROWS ( Tickets ), KEEPFILTERS ( Tickets[Our Team] = "Sí" ) )
+VAR _den = COUNTROWS ( Tickets )
+RETURN DIVIDE ( _num, _den )
+
+//---------------------------------------------
+// COLUMNAS CALCULADAS (se evalúan por fila)
+//---------------------------------------------
+
+// Normalizaciones de minutos -> horas
+First Reply (horas) =
+    DIVIDE ( Tickets[First reply time in minutes (biz hours)], 60 )
+
+First Resolution (horas) =
+    DIVIDE ( Tickets[First resolution time in minutes (biz hours)], 60 )
+
+Full Resolution (horas) =
+    DIVIDE ( Tickets[Full resolution time in minutes (biz hours)], 60 )
+
+Espera cliente (horas) =
+    DIVIDE ( Tickets[Requester wait time in minutes (biz hours)], 60 )
+
+Espera agente (horas, biz) =
+    DIVIDE ( Tickets[Agent wait time in minutes (biz hours)], 60 )
+
+Espera agente (horas, no biz) =
+    DIVIDE ( Tickets[Agent wait time in minutes], 60 )
+
+On Hold (horas, biz) =
+    DIVIDE ( Tickets[On hold time in minutes (biz hours)], 60 )
+
+// Flags de SLA por fila (útiles para segmentación)
+First Reply dentro de SLA =
+    Tickets[First Reply (horas)] <= [SLA First Reply (horas)]
+
+// Día de la semana (texto largo; si prefieres ISO numérico, usa WEEKDAY)
+Día de la semana =
+    FORMAT ( Tickets[Assigned at], "dddd" )
+
+// Semana ISO de creación (evita ambigüedad entre WEEKNUM y ISO)
+Semana ISO de creación =
+    ISOWEEKNUM ( Tickets[Created at] )
+
+// Métricas de flujo para un “Agente A” (anónimo)
+// Si tienes listas/arrays, es más robusto CONTAINSSTRING
+Our Team =
+VAR _isAssignee =
+    Tickets[Assignee] = "Agente A"
+VAR _isInTutorList =
+    CONTAINSSTRING ( COALESCE ( Tickets[Assigned tutor (list)], "" ), "Agente A" )
+RETURN IF ( OR ( _isAssignee, _isInTutorList ), "Sí", "No" )
+
+// Diferenciales de tiempo (minutos -> horas) para tres casos típicos:
+// 1) Asignado (directo) y reescala – tiempo hasta la asignación
+Directo + Reescala (min) =
+    DATEDIFF ( Tickets[Created at], Tickets[Assigned at], MINUTE )
+
+Directo + Reescala (horas) =
+    DIVIDE ( Tickets[Directo + Reescala (min)], 60 )
+
+Directo + Reescala sin espera (horas) =
+VAR _neto = Tickets[Directo + Reescala (horas)] - Tickets[Espera agente (horas, no biz)]
+RETURN IF ( _neto < 0, 0, _neto )
+
+// 2) Directo y resuelve – tiempo hasta solución
+Directo + Resuelve (min) =
+    DATEDIFF ( Tickets[Created at], Tickets[Solved at], MINUTE )
+
+Directo + Resuelve (horas) =
+    DIVIDE ( Tickets[Directo + Resuelve (min)], 60 )
+
+Directo + Resuelve sin espera (horas) =
+VAR _neto2 = Tickets[Directo + Resuelve (horas)] - Tickets[Espera agente (horas, no biz)]
+RETURN IF ( _neto2 < 0, 0, _neto2 )
+
+// 3) Recibe y resuelve – desde asignación hasta solución
+Recibe + Resuelve (min) =
+    DATEDIFF ( Tickets[Assigned at], Tickets[Solved at], MINUTE )
+
+Recibe + Resuelve (horas) =
+    DIVIDE ( Tickets[Recibe + Resuelve (min)], 60 )
+
+Recibe + Resuelve sin espera (horas) =
+VAR _neto3 = Tickets[Recibe + Resuelve (horas)] - Tickets[Espera agente (horas, no biz)]
+RETURN IF ( _neto3 < 0, 0, _neto3 )
+
+// Tiempos netos clave (excluyendo On Hold) por fila
+First Resolution neto (horas) =
+    DIVIDE ( Tickets[First resolution time in minutes (biz hours)] - Tickets[On hold time in minutes (biz hours)], 60 )
+
+Full Resolution neto (horas) =
+    DIVIDE ( Tickets[Full resolution time in minutes (biz hours)] - Tickets[On hold time in minutes (biz hours)], 60 )
+
