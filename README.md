@@ -1,4 +1,5 @@
 # 📊 Tickets Dashboard – Zendesk · Power BI
+All content shown here has been recreated with synthetic and anonymized data in compliance with confidentiality agreements.
 
 ## 🧠 Overview  
 
